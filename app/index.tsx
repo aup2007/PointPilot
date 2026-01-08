@@ -119,7 +119,7 @@ export default function LandingPage() {
       <Animated.View style={[styles.videoContainer, { opacity: heroMapOpacity }]}>
         <Video
           style={styles.video}
-          source={require('../assets/videos/transfer.mp4')} 
+          source={require('../assets/videos/transfer2.mp4')} 
           resizeMode={ResizeMode.COVER}
           shouldPlay isLooping isMuted
         />
