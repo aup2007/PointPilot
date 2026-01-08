@@ -17,11 +17,11 @@ const SECTIONS = [
     title: "TRAVEL FREELY",
     text: "Transfer your points 1:1 to\nthe world's top airlines and hotels.",
   },
-  {
-    id: 3,
-    title: "THE TRANSFER LAB",
-    text: "A real-time valuation engine\nto maximize every single point.",
-  }
+  // {
+  //   id: 3,
+  //   title: "THE TRANSFER LAB",
+  //   text: "A real-time valuation engine\nto maximize every single point.",
+  // }
 ];
 
 const FadeSection = ({ item, scrollY, index }) => {

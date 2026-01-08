@@ -23,8 +23,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 import { useRouter } from 'expo-router';
 
 // --- CONFIGURATION ---
-const API_URL_BASE = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'https://pointpilot.onrender.com';
-
+const API_URL_BASE = 
+  Platform.OS === 'android' 
+    ? 'http://10.0.2.2:8000' 
+    : Platform.OS === 'web'
+      ? 'https://pointpilot.onrender.com'
+      : 'https://pointpilot.onrender.com';
 const COLORS = {
   bg: '#000000',
   card: '#0D0D0D',

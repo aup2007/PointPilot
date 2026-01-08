@@ -1,9 +1,12 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
+  "version": 2,
+  "buildCommand": "npx expo export -p web",
+  "outputDirectory": "dist",
+  "framework": null,
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/$1"
     }
   ]
 }
