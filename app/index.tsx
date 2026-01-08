@@ -9,13 +9,13 @@ const { height, width } = Dimensions.get('window');
 const SECTIONS = [
   {
     id: 1,
-    title: "EARN ON RENT",
-    text: "Transform your largest monthly\nexpense into valuable rewards.",
+    title: "TRANSFER OPTIMIZER",
+    text: "Instantly identify high-value\npartners for your next escape",
   },
   {
     id: 2,
-    title: "TRAVEL FREELY",
-    text: "Transfer your points 1:1 to\nthe world's top airlines and hotels.",
+    title: "RENT DAY BOOST",
+    text: "Maximize your rewards with\nexclusive 2X transfer multipliers",
   },
   // {
   //   id: 3,
