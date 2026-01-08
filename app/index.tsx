@@ -9,13 +9,14 @@ const { height, width } = Dimensions.get('window');
 const SECTIONS = [
   {
     id: 1,
-    title: "TRANSFER OPTIMIZER",
-    text: "Instantly identify high-value\npartners for your next escape",
+    title: "RENT DAY BOOST",
+    text: "Maximize your rewards with\nexclusive 2X transfer multipliers",
+    
   },
   {
     id: 2,
-    title: "RENT DAY BOOST",
-    text: "Maximize your rewards with\nexclusive 2X transfer multipliers",
+    title: "TRANSFER OPTIMIZER",
+    text: "Instantly identify high-value\npartners for your next escape",
   },
   // {
   //   id: 3,
