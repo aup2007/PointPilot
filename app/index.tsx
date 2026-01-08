@@ -119,7 +119,7 @@ export default function LandingPage() {
       <Animated.View style={[styles.videoContainer, { opacity: heroMapOpacity }]}>
         <Video
           style={styles.video}
-          source={{ uri: 'https://cdn.pixabay.com/video/2021/07/28/83084-580798606_large.mp4' }} 
+          source={require('../assets/videos/transfer.mp4')} 
           resizeMode={ResizeMode.COVER}
           shouldPlay isLooping isMuted
         />
