@@ -220,7 +220,14 @@ export default function TransferLab() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: COLORS.bg, Platform.select({
+    web: { 
+      height: '100vh', 
+      width: '100vw',
+      overflow: 'hidden' 
+    },
+    default: {}
+  }) },
   scrollContent: { padding: 20, paddingBottom: 50 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   backText: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
