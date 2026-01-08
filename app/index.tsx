@@ -64,7 +64,7 @@ export default function LandingPage() {
 
     const yOffset = e.nativeEvent.contentOffset.y;
     // Switch status bar to dark text when we are deep in the 4th section
-    if (yOffset > height * 3.5) {
+    if (yOffset > height * 2.5) {
       if (!isWhiteMode) setIsWhiteMode(true);
     } else {
       if (isWhiteMode) setIsWhiteMode(false);
@@ -95,15 +95,15 @@ export default function LandingPage() {
   });
 
   // 4. Video 3 (Lab)
-  const video3Opacity = scrollY.interpolate({
-    inputRange: [height * 2, height * 3, height * 4],
-    outputRange: [0, 1, 0], 
-    extrapolate: 'clamp',
-  });
+  // const video3Opacity = scrollY.interpolate({
+  //   inputRange: [height * 2, height * 3, height * 4],
+  //   outputRange: [0, 1, 0], 
+  //   extrapolate: 'clamp',
+  // });
 
   // 5. WHITE BACKGROUND FADE
   const whiteBgOpacity = scrollY.interpolate({
-    inputRange: [height * 3, height * 3.8],
+    inputRange: [height * 2, height * 2.8],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
@@ -147,7 +147,7 @@ export default function LandingPage() {
         <View style={styles.videoOverlay} />
       </Animated.View>
 
-      <Animated.View style={[styles.videoContainer, { opacity: video3Opacity }]}>
+      {/* <Animated.View style={[styles.videoContainer, { opacity: video3Opacity }]}>
         <Video
           key="video-3-final"
           style={[styles.video, Platform.OS === 'web' ? { objectFit: 'contain' } : undefined]} 
@@ -156,7 +156,7 @@ export default function LandingPage() {
           shouldPlay isLooping isMuted
         />
         <View style={styles.videoOverlay} />
-      </Animated.View>
+      </Animated.View> */}
 
       {/* D. WHITE OVERLAY */}
       <Animated.View 
