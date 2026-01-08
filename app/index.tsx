@@ -188,7 +188,7 @@ export default function LandingPage() {
             A real-time valuation engine{'\n'}to maximize every single point.
           </Text>
 
-          <Text style={styles.builtBy}>ENGINEERED BY ATHARV</Text>
+          <Text style={styles.builtBy}>BUILT BY ATHARV</Text>
           <View style={styles.scrollIndicatorContainer}>
              <Text style={styles.scrollIndicator}>SCROLL TO EXPLORE</Text>
              <View style={styles.scrollLine} />
