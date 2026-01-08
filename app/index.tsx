@@ -141,7 +141,7 @@ export default function LandingPage() {
         <Video
           style={styles.video}
           source={require('../assets/videos/travel.mp4')}
-          resizeMode={ResizeMode.COVER}
+          resizeMode={ResizeMode.CONTAIN}
           shouldPlay isLooping isMuted
         />
         <View style={styles.videoOverlay} />
@@ -228,7 +228,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'transparent'
   },
-  video: { width: '100%', height: '100%' },
+  video: { width: '100%', height: '100%', ...Platform.select({
+    web: { 
+      // This keeps the video filling the screen on laptops
+      objectFit: 'cover' 
+    },
+    default: { 
+      // This ensures the video isn't cropped on mobile screens
+      resizeMode: 'contain' 
+    }
+  }) },
   videoOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
   
   // Section Layout
