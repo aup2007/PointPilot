@@ -124,7 +124,8 @@ def optimize_flight(request: FlightRequest):
     cash_price = get_cached_flight_price(request.origin.upper(), request.destination.upper(), request.date)
     
     route_key = f"{request.origin.upper()}-{request.destination.upper()}"
-    # Fallback to general partner list if specific route missing
+    
+    # Use fallback if route not found
     options = FLIGHT_CHART.get(route_key, [
         {"partner": "United (Star Alliance)", "cost": 35000, "tax": 50},
         {"partner": "British Airways (Oneworld)", "cost": 30000, "tax": 150},
@@ -134,19 +135,39 @@ def optimize_flight(request: FlightRequest):
     results = []
     for opt in options:
         effective_pts = opt['cost'] / 2 if request.is_rent_day else opt['cost']
-        cpp = ((cash_price - opt['tax']) * 100) / effective_pts
         
+        # 1. Calculate Net Value (Cash - Taxes you still have to pay)
+        net_value = cash_price - opt['tax']
+        
+        # 2. Calculate CPP (Cents Per Point)
+        if effective_pts > 0:
+            cpp = (net_value * 100) / effective_pts
+        else:
+            cpp = 0.0
+            
+        # 3. STRICT STATUS LOGIC (The Fix)
+        if cpp >= 2.0:
+            status = "EXCELLENT"
+        elif cpp >= 1.1:
+            status = "GOOD"
+        else:
+            status = "POOR"  # Captures 0.17, -0.16, etc.
+
         results.append({
             "partner": opt['partner'],
             "points_required": int(effective_pts),
             "cpp": round(cpp, 2),
-            "cash_savings": round(((cash_price * 100 / 1.25) - effective_pts) * 1.25 / 100, 2),
-            "status": "EXCELLENT" if cpp > 2.0 else "GOOD"
+            "cash_savings": round(net_value, 2),
+            "status": status
         })
 
+    # Sort so the "POOR" options drop to the bottom
     results = sorted(results, key=lambda x: x['cpp'], reverse=True)
-    return {"best_option": results[0], "results": results, "market_baseline": {"cash_price": cash_price}}
-
+    
+    # Ensure best_option is valid (if all are poor, pick the least poor)
+    best = results[0] if results else None
+    
+    return {"best_option": best, "results": results, "market_baseline": {"cash_price": cash_price}}
 @app.post("/optimize/hotel")
 def optimize_hotel(request: HotelRequest):
     # Map Airport Code (e.g., JFK) to City Code (NYC) if needed
