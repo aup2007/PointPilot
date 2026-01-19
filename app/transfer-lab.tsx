@@ -5,7 +5,6 @@ import {
   Text, 
   TextInput, 
   TouchableOpacity, 
-  Switch, 
   SafeAreaView, 
   ScrollView, 
   StatusBar, 
@@ -14,21 +13,21 @@ import {
   ActivityIndicator, 
   LayoutAnimation,
   UIManager,
-  Alert 
+  Alert,
+  Modal,
+  FlatList
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- CONFIGURATION ---
-// FIXED: Use Localhost for Web so you can test locally
 const API_URL_BASE = 
   Platform.OS === 'android' 
     ? 'http://10.0.2.2:8000' 
     : Platform.OS === 'web'
-      ? 'http://127.0.0.1:8000' 
+      ? 'https://pointpilot.onrender.com' 
       : 'https://pointpilot.onrender.com';
 
 const COLORS = {
@@ -45,17 +44,38 @@ const COLORS = {
 
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 
-// --- HELPER: CROSS-PLATFORM ALERT ---
-// React Native's Alert.alert doesn't always show on Web. This fixes it.
+// --- DATA LISTS ---
+const AIRPORTS = [
+  { code: 'JFK', name: 'New York (JFK)' },
+  { code: 'LHR', name: 'London Heathrow' },
+  { code: 'CDG', name: 'Paris Charles de Gaulle' },
+  { code: 'HND', name: 'Tokyo Haneda' },
+  { code: 'NRT', "name": 'Tokyo Narita' },
+  { code: 'DXB', name: 'Dubai International' },
+  { code: 'SIN', name: 'Singapore Changi' },
+  { code: 'LAX', name: 'Los Angeles' },
+  { code: 'SFO', name: 'San Francisco' },
+  { code: 'MIA', name: 'Miami International' },
+  { code: 'EZE', name: 'Buenos Aires' },
+  { code: 'SYD', name: 'Sydney Kingsford Smith' },
+];
+
+const CITIES = [
+  { code: 'NYC', name: 'New York City' },
+  { code: 'LON', name: 'London' },
+  { code: 'PAR', name: 'Paris' },
+  { code: 'TYO', name: 'Tokyo' },
+  { code: 'DXB', name: 'Dubai' },
+  { code: 'SIN', name: 'Singapore' },
+  { code: 'LAX', name: 'Los Angeles' },
+];
+
+// --- HELPERS ---
 const showAlert = (title: string, message: string) => {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}: ${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
+  if (Platform.OS === 'web') window.alert(`${title}: ${message}`);
+  else Alert.alert(title, message);
 };
 
-// --- HELPER: DATE FORMATTING & PARSING ---
 const formatWithDashes = (text: string) => {
   const cleaned = text.replace(/[^0-9]/g, '');
   let formatted = cleaned;
@@ -78,30 +98,50 @@ const parseLocal = (dateStr: string) => {
 
 export default function TransferLab() {
   const router = useRouter();
-  const [mode, setMode] = useState('flight');
-  const [origin, setOrigin] = useState('');     
-  const [destination, setDestination] = useState(''); 
+  const { rentDayOverride } = useLocalSearchParams();
   
+  const [mode, setMode] = useState('flight');
+  const [origin, setOrigin] = useState('JFK');     
+  const [destination, setDestination] = useState('LHR'); 
   const [date, setDate] = useState('2025-06-15'); 
   const [returnDate, setReturnDate] = useState('');
 
+  // --- MODAL STATE ---
+  const [modalVisible, setModalVisible] = useState(false);
+  const [activeField, setActiveField] = useState<'origin' | 'destination'>('origin');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // --- RENT DAY LOGIC ---
   const [isRentDay, setIsRentDay] = useState(false);
+  const [advisory, setAdvisory] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [advisory, setAdvisory] = useState<string | null>(null);
 
   const fadeAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     const today = new Date();
-    if (today.getDate() >= 25) {
+    const isDevMode = rentDayOverride === 'true';
+
+    if (isDevMode) {
+      setAdvisory("🛠️ DEV MODE: RENT DAY APPROACHING (5 DAYS) • WAIT FOR 2X");
+      setIsRentDay(false);
+    } 
+    else if (today.getDate() === 1) {
+      setAdvisory("RENT DAY ACTIVE • 2X TRANSFER BONUS LIVE");
+      setIsRentDay(true);
+    }
+    else if (today.getDate() >= 25) {
       const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
       const daysLeft = Math.ceil((nextMonth.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       setAdvisory(`RENT DAY APPROACHING (${daysLeft} DAYS) • WAIT FOR 2X BONUS`);
-    } else {
+      setIsRentDay(false);
+    } 
+    else {
       setAdvisory(null);
+      setIsRentDay(false);
     }
-  }, []);
+  }, [rentDayOverride]);
 
   useEffect(() => {
     if (result) {
@@ -118,16 +158,34 @@ export default function TransferLab() {
   const handleDateChange = (text: string) => setDate(formatWithDashes(text));
   const handleReturnDateChange = (text: string) => setReturnDate(formatWithDashes(text));
 
-  const handleOptimize = async () => {
-    console.log("Analyze Button Pressed"); // DEBUG LOG
+  // --- SELECTION LOGIC ---
+  const openSelection = (field: 'origin' | 'destination') => {
+    setActiveField(field);
+    setSearchQuery('');
+    setModalVisible(true);
+  };
 
-    // 1. INPUT CHECK
+  const selectLocation = (code: string) => {
+    if (activeField === 'origin') setOrigin(code);
+    else setDestination(code);
+    setModalVisible(false);
+  };
+
+  const getFilteredList = () => {
+    const list = mode === 'flight' ? AIRPORTS : CITIES;
+    if (!searchQuery) return list;
+    return list.filter(item => 
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      item.code.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
+  const handleOptimize = async () => {
     if (!origin || !date) {
-      showAlert("Missing Info", "Please enter Origin and Date");
+      showAlert("Missing Info", "Please select Locations and Date");
       return;
     }
 
-    // 2. VALIDATION
     const today = new Date();
     today.setHours(0,0,0,0);
     const tripDate = parseLocal(date);
@@ -141,21 +199,6 @@ export default function TransferLab() {
       return;
     }
 
-    // Check Return Date (if entered)
-    if (returnDate) {
-      if (returnDate.length !== 10) {
-        showAlert("Return Date Error", "Please enter valid YYYY-MM-DD");
-        return;
-      }
-      const retDate = parseLocal(returnDate);
-      if (retDate && retDate < tripDate) {
-        showAlert("Logic Error", "Return date cannot be before departure.");
-        return;
-      }
-    }
-
-    // 3. API CALL
-    console.log(`Fetching from: ${API_URL_BASE}`);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setLoading(true);
     setResult(null);
@@ -165,14 +208,14 @@ export default function TransferLab() {
 
     const requestBody = mode === 'flight' 
       ? {
-          origin: origin.toUpperCase(),
-          destination: destination.toUpperCase(),
+          origin: origin,
+          destination: destination,
           date: date,
           return_date: finalReturn,
-          is_rent_day: isRentDay,
+          is_rent_day: isRentDay, 
         }
       : {
-          city_code: origin.toUpperCase(),
+          city_code: origin, // For Hotels, "Origin" input acts as the City selector
           date: date,
           return_date: finalReturn,
           is_rent_day: isRentDay,
@@ -185,18 +228,14 @@ export default function TransferLab() {
         body: JSON.stringify(requestBody),
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       
       const data = await response.json();
-      console.log("Data received:", data);
-      
       LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
       setResult(data);
     } catch (error) {
       console.error(error);
-      showAlert("Connection Error", `Could not connect to backend at ${API_URL_BASE}. Is main.py running?`);
+      showAlert("Connection Error", "Is the backend running?");
     } finally {
       setLoading(false);
     }
@@ -221,10 +260,10 @@ export default function TransferLab() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
         {advisory && (
-          <View style={styles.advisoryContainer}>
-            <View style={styles.advisoryContent}>
-              <View style={styles.advisoryDot} />
-              <Text style={styles.advisoryText}>{advisory}</Text>
+          <View style={[styles.advisoryContainer, { marginBottom: 10 }]}>
+            <View style={[styles.advisoryContent, { borderColor: COLORS.blue }]}>
+              <View style={[styles.advisoryDot, { backgroundColor: COLORS.blue }]} />
+              <Text style={[styles.advisoryText, { color: COLORS.blue }]}>{advisory}</Text>
             </View>
           </View>
         )}
@@ -240,41 +279,37 @@ export default function TransferLab() {
         <View style={styles.mainCard}>
           <Text style={styles.sectionLabel}>OPTIMIZATION PARAMETERS</Text>
           
+          {/* LOCATION SELECTORS (TRIGGER MODALS) */}
           <View style={styles.inputRow}>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>FROM</Text>
-              <TextInput 
-                value={origin} 
-                onChangeText={setOrigin} 
-                style={styles.largeInput} 
-                placeholder="JFK" 
-                placeholderTextColor="#333" 
-                maxLength={3} 
-                autoCapitalize="characters"
-              />
-            </View>
+            <TouchableOpacity style={styles.inputWrapper} onPress={() => openSelection('origin')}>
+              <Text style={styles.inputLabel}>{mode === 'flight' ? 'FROM' : 'CITY'}</Text>
+              <Text style={styles.largeInput}>{origin}</Text>
+              <Text style={styles.subInputLabel}>Tap to Change</Text>
+            </TouchableOpacity>
+
             <View style={styles.verticalDivider} />
-            <View style={styles.inputWrapper}>
+
+            <TouchableOpacity 
+              style={styles.inputWrapper} 
+              onPress={() => mode === 'flight' && openSelection('destination')}
+              disabled={mode === 'hotel'}
+            >
               <Text style={styles.inputLabel}>{mode === 'flight' ? 'TO' : 'ANALYSIS'}</Text>
               {mode === 'flight' ? (
-                <TextInput 
-                  value={destination} 
-                  onChangeText={setDestination} 
-                  style={[styles.largeInput, { color: COLORS.blue }]} 
-                  placeholder="LHR" 
-                  placeholderTextColor="#333" 
-                  maxLength={3} 
-                  autoCapitalize="characters"
-                />
+                <>
+                  <Text style={[styles.largeInput, { color: COLORS.blue }]}>{destination}</Text>
+                  <Text style={styles.subInputLabel}>Tap to Change</Text>
+                </>
               ) : (
-                <View style={{ alignItems: 'center', marginTop: 5 }}>
+                <View style={{ alignItems: 'center' }}>
                   <Text style={[styles.largeInput, { fontSize: 20, color: COLORS.blue }]}>MULTI</Text>
                   <Text style={[styles.largeInput, { fontSize: 10, color: COLORS.textDim }]}>PARTNER</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           </View>
 
+          {/* DATES */}
           <View style={styles.inputRow}>
             <View style={styles.inputWrapper}>
                <Text style={styles.inputLabel}>
@@ -315,32 +350,13 @@ export default function TransferLab() {
                : "Detected Standard Season Pricing"}
           </Text>
 
-          <View style={[styles.toggleRow, isRentDay && styles.toggleRowActive]}>
-            <View>
-              <Text style={[styles.toggleTitle, isRentDay && {color: '#000'}]}>Rent Day Bonus Mode</Text>
-              <Text style={[styles.toggleSub, isRentDay && {color: '#333'}]}>{isRentDay ? "ACTIVE: 2X Multiplier Sim." : "Simulate Rent Day (1st of Month)"}</Text>
-            </View>
-            <Switch trackColor={{ false: "#222", true: "#000" }} thumbColor={isRentDay ? "#FFF" : "#444"} onValueChange={() => setIsRentDay(!isRentDay)} value={isRentDay} />
-          </View>
-
           <TouchableOpacity style={styles.runButton} onPress={handleOptimize} disabled={loading}>
             {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.runButtonText}>ANALYZE VALUE</Text>}
           </TouchableOpacity>
         </View>
 
         {result && (
-          <Animated.View style={[
-            styles.resultsWrapper, 
-            { 
-              opacity: fadeAnim, 
-              transform: [{
-                translateY: fadeAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0] 
-                })
-              }]
-            }
-          ]}>
+          <Animated.View style={[styles.resultsWrapper, { opacity: fadeAnim }]}>
             <View style={styles.transparencyCard}>
               <Text style={styles.transparencyTitle}>
                 {mode === 'hotel' && result?.market_baseline?.property 
@@ -348,7 +364,6 @@ export default function TransferLab() {
                   : "MARKET VALUE ANALYSIS"}
               </Text>
               <View style={styles.comparisonScale}>
-                
                 <View style={styles.scaleItem}>
                   <Text style={styles.scaleLabel}>LIVE CASH PRICE</Text>
                   <Text style={[styles.scaleValue, { color: COLORS.green }]}>
@@ -356,9 +371,7 @@ export default function TransferLab() {
                   </Text>
                   <Text style={styles.subScaleLabel}>Market Rate</Text>
                 </View>
-
                 <View style={styles.scaleDivider} />
-                
                 <View style={styles.scaleItem}>
                   <Text style={[styles.scaleLabel, {color: COLORS.blue}]}>BEST REDEMPTION</Text>
                   <Text style={[styles.scaleValue, {color: COLORS.blue}]}>{result.best_option.cpp}¢</Text>
@@ -388,58 +401,72 @@ export default function TransferLab() {
           </Animated.View>
         )}
       </ScrollView>
+
+      {/* --- SELECTION MODAL --- */}
+      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select {activeField === 'origin' ? (mode === 'flight' ? 'Origin' : 'City') : 'Destination'}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput 
+              style={styles.searchBar}
+              placeholder="Search (e.g. Tokyo, JFK, London)"
+              placeholderTextColor="#666"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+
+            <FlatList 
+              data={getFilteredList()}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.listItem} onPress={() => selectLocation(item.code)}>
+                  <Text style={styles.listCode}>{item.code}</Text>
+                  <Text style={styles.listName}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.bg,
-    ...Platform.select({
-      web: { height: '100vh', width: '100vw' },
-      default: {}
-    }) 
-  },
+  container: { flex: 1, backgroundColor: COLORS.bg, ...Platform.select({ web: { height: '100vh', width: '100vw' }, default: {} }) },
   scrollContent: { padding: 20, paddingBottom: 50 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   backText: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   brandTitle: { color: '#FFF', fontWeight: '900', fontSize: 16, letterSpacing: 1 },
   brandSubtitle: { color: COLORS.blue },
-  
   modeContainer: { flexDirection: 'row', backgroundColor: '#111', borderRadius: 12, padding: 4, marginBottom: 20 },
   modeButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10 },
   modeButtonActive: { backgroundColor: COLORS.blue },
   modeText: { color: '#666', fontSize: 10, fontWeight: '800' },
   modeTextActive: { color: '#000' },
-  
   mainCard: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 24, padding: 24, marginBottom: 24 },
   sectionLabel: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginBottom: 24 },
-  
   inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
   inputWrapper: { flex: 1, alignItems: 'center' },
   verticalDivider: { width: 1, height: '100%', backgroundColor: COLORS.border, marginHorizontal: 16 },
   inputLabel: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', marginBottom: 12 },
-  
   largeInput: { color: '#FFF', fontSize: 32, fontWeight: '300', textAlign: 'center', fontFamily: MONO },
+  subInputLabel: { color: COLORS.textDim, fontSize: 10, marginTop: 4 }, // NEW STYLE
   helperText: { color: COLORS.textDim, fontSize: 10, marginTop: 8 },
-  
   advisoryContainer: { alignItems: 'center', marginBottom: 20 },
-  advisoryContent: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', paddingVertical: 10, paddingHorizontal: 16,
-    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(212, 175, 55, 0.4)', shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10,
-  },
+  advisoryContent: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(212, 175, 55, 0.4)', shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10 },
   advisoryDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.gold, marginRight: 10 },
   advisoryText: { color: COLORS.gold, fontWeight: '700', fontSize: 10, letterSpacing: 1, fontFamily: MONO },
-
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#151515', padding: 16, borderRadius: 12 },
-  toggleRowActive: { backgroundColor: COLORS.blue },
-  toggleTitle: { color: '#FFF', fontSize: 12, fontWeight: '700' },
-  toggleSub: { color: COLORS.textDim, fontSize: 10 },
-  
   runButton: { backgroundColor: COLORS.blue, paddingVertical: 18, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   runButtonText: { color: '#000', fontWeight: '900', fontSize: 11, letterSpacing: 1.5 },
-  
   resultsWrapper: {},
   transparencyCard: { backgroundColor: '#0D0D0D', borderRadius: 24, padding: 24, marginBottom: 24, borderWidth: 1, borderColor: '#222' },
   transparencyTitle: { color: '#444', fontSize: 9, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 20 },
@@ -459,4 +486,15 @@ const styles = StyleSheet.create({
   valColumn: { alignItems: 'flex-end' },
   cppText: { fontSize: 20, fontWeight: '300', fontFamily: MONO },
   statusSubText: { fontSize: 8, fontWeight: '900', color: '#333', marginTop: 2 },
+
+  // --- MODAL STYLES ---
+  modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#111', height: '80%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, alignItems: 'center' },
+  modalTitle: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  closeText: { color: COLORS.blue, fontSize: 16, fontWeight: '600' },
+  searchBar: { backgroundColor: '#222', color: '#FFF', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 20 },
+  listItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#222', flexDirection: 'row', alignItems: 'center', gap: 16 },
+  listCode: { color: COLORS.blue, fontSize: 18, fontWeight: '900', fontFamily: MONO, width: 50 },
+  listName: { color: '#FFF', fontSize: 16, fontWeight: '500' },
 });
